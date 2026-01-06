@@ -22,7 +22,3 @@ A lightweight Vite + TypeScript setup for experimenting with modern WebGL using 
 - Place exported files in `public/models/`
 - Reference them from `src/main.ts` via the `modelConfigs` array
 - Use the on-screen controls to toggle visibility and adjust lighting
-
-## Testing on NUC
-- Run dev server: `npm run dev`
-- Access from other machines: `http://<nuc-ip>:5173`
