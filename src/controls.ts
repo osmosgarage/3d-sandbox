@@ -1,10 +1,13 @@
-import { Euler, Object3D, PerspectiveCamera, Raycaster, Vector3 } from 'three';
+import { Object3D, PerspectiveCamera, Raycaster, Vector3 } from 'three';
+import { DeviceOrientationControls } from 'three/examples/jsm/controls/DeviceOrientationControls.js';
 
 type ControlState = {
   flyMode: boolean;
   speed: number;
   lookSpeed: number;
   walkHeight: number;
+  gyroEnabled: boolean;
+  gyroAvailable: boolean;
 };
 
 type ControlAPI = {
@@ -15,6 +18,7 @@ type ControlAPI = {
   setLookSpeed: (speed: number) => void;
   setColliders: (colliders: Object3D[]) => void;
   setColliderRadius: (radius: number) => void;
+  setGyroEnabled: (enabled: boolean) => Promise<boolean>;
   getState: () => ControlState;
 };
 
@@ -29,7 +33,10 @@ export const createWalkFlyControls = (
     flyMode: true,
     speed: 3,
     lookSpeed: 0.002,
-    walkHeight: 1.6
+    walkHeight: 1.6,
+    gyroEnabled: false,
+    gyroAvailable:
+      typeof window !== 'undefined' && 'DeviceOrientationEvent' in window
   };
 
   const movement = {
@@ -50,6 +57,7 @@ export const createWalkFlyControls = (
   let yaw = camera.rotation.y;
   let pitch = camera.rotation.x;
   let isPointerLocked = false;
+  const deviceControls = new DeviceOrientationControls(camera);
 
   camera.rotation.order = 'YXZ';
 
@@ -60,6 +68,9 @@ export const createWalkFlyControls = (
 
   const onMouseMove = (event: MouseEvent) => {
     if (!isPointerLocked) {
+      return;
+    }
+    if (state.gyroEnabled) {
       return;
     }
     yaw -= event.movementX * state.lookSpeed;
@@ -215,6 +226,9 @@ export const createWalkFlyControls = (
       if (event.pointerId !== lookPointerId) {
         return;
       }
+      if (state.gyroEnabled) {
+        return;
+      }
       const dx = event.clientX - lastLook.x;
       const dy = event.clientY - lastLook.y;
       lastLook = { x: event.clientX, y: event.clientY };
@@ -240,6 +254,9 @@ export const createWalkFlyControls = (
   domElement.addEventListener('click', requestPointerLock);
 
   const update = (delta: number) => {
+    if (state.gyroEnabled) {
+      deviceControls.update();
+    }
     const previousPosition = camera.position.clone();
     const inputX = movement.right - movement.left + touchMovement.x;
     const inputZ = movement.forward - movement.backward - touchMovement.z;
@@ -255,8 +272,9 @@ export const createWalkFlyControls = (
       direction.addScaledVector(forward, inputZ);
       direction.y += inputY;
     } else {
-      const forward = new Vector3(Math.sin(yaw), 0, -Math.cos(yaw));
-      const right = new Vector3(Math.cos(yaw), 0, Math.sin(yaw));
+      const currentYaw = camera.rotation.y;
+      const forward = new Vector3(Math.sin(currentYaw), 0, -Math.cos(currentYaw));
+      const right = new Vector3(Math.cos(currentYaw), 0, Math.sin(currentYaw));
       direction.addScaledVector(right, inputX);
       direction.addScaledVector(forward, inputZ);
     }
@@ -292,6 +310,41 @@ export const createWalkFlyControls = (
     document.removeEventListener('keyup', onKeyUp);
     domElement.removeEventListener('click', requestPointerLock);
     touchControls?.remove();
+    deviceControls.disconnect();
+  };
+
+  const setGyroEnabled = async (enabled: boolean) => {
+    if (!state.gyroAvailable) {
+      state.gyroEnabled = false;
+      return false;
+    }
+
+    if (enabled && 'requestPermission' in DeviceOrientationEvent) {
+      try {
+        const permission = await (
+          DeviceOrientationEvent as unknown as {
+            requestPermission: () => Promise<'granted' | 'denied'>;
+          }
+        ).requestPermission();
+        if (permission !== 'granted') {
+          state.gyroEnabled = false;
+          return false;
+        }
+      } catch {
+        state.gyroEnabled = false;
+        return false;
+      }
+    }
+
+    state.gyroEnabled = enabled;
+    if (enabled) {
+      deviceControls.connect();
+      yaw = camera.rotation.y;
+      pitch = camera.rotation.x;
+    } else {
+      deviceControls.disconnect();
+    }
+    return state.gyroEnabled;
   };
 
   return {
@@ -316,6 +369,7 @@ export const createWalkFlyControls = (
     setColliderRadius: (radius) => {
       colliderRadius = radius;
     },
+    setGyroEnabled,
     getState: () => ({ ...state })
   };
 };

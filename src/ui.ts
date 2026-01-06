@@ -8,10 +8,17 @@ type UIOptions = {
   renderer: WebGLRenderer;
   onEnvironmentIntensityChange: (intensity: number) => void;
   navigation?: {
-    getState: () => { flyMode: boolean; speed: number; lookSpeed: number };
+    getState: () => {
+      flyMode: boolean;
+      speed: number;
+      lookSpeed: number;
+      gyroEnabled: boolean;
+      gyroAvailable: boolean;
+    };
     setFlyMode: (enabled: boolean) => void;
     setSpeed: (speed: number) => void;
     setLookSpeed: (speed: number) => void;
+    setGyroEnabled: (enabled: boolean) => Promise<boolean>;
   };
 };
 
@@ -211,6 +218,17 @@ export const createUI = ({
         navigation.setLookSpeed(value);
       })
     );
+
+    if (state.gyroAvailable) {
+      const gyroToggle = createToggle('Gyro Look', state.gyroEnabled, (enabled) => {
+        navigation.setGyroEnabled(enabled).then((granted) => {
+          if (!granted) {
+            (gyroToggle.querySelector('input') as HTMLInputElement).checked = false;
+          }
+        });
+      });
+      navigationSection.appendChild(gyroToggle);
+    }
 
     content.appendChild(navigationSection);
   }
