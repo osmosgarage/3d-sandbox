@@ -48,6 +48,7 @@ export const createWalkFlyControls = (
   };
 
   const touchMovement = { x: 0, z: 0 };
+  let touchRotate = 0;
   const isTouch = window.matchMedia('(pointer: coarse)').matches;
   const raycaster = new Raycaster();
   const colliderTargets: Object3D[] = [];
@@ -59,7 +60,6 @@ export const createWalkFlyControls = (
   let deviceOrientation: DeviceOrientationEvent | null = null;
   let screenOrientation = 0;
   let lookOffsetYaw = 0;
-  let lookOffsetPitch = 0;
 
   const zee = new Vector3(0, 0, 1);
   const euler = new Euler();
@@ -184,12 +184,21 @@ export const createWalkFlyControls = (
     movePad.className = 'touch-joystick';
     const moveStick = document.createElement('div');
     moveStick.className = 'touch-stick';
-    movePad.appendChild(moveStick);
+    const moveLabel = document.createElement('span');
+    moveLabel.className = 'touch-label';
+    moveLabel.textContent = 'Move';
+    movePad.append(moveLabel, moveStick);
 
-    const lookPad = document.createElement('div');
-    lookPad.className = 'touch-lookpad';
+    const rotatePad = document.createElement('div');
+    rotatePad.className = 'touch-rotate';
+    const rotateStick = document.createElement('div');
+    rotateStick.className = 'touch-stick';
+    const rotateLabel = document.createElement('span');
+    rotateLabel.className = 'touch-label';
+    rotateLabel.textContent = 'Rotate';
+    rotatePad.append(rotateLabel, rotateStick);
 
-    container.append(movePad, lookPad);
+    container.append(movePad, rotatePad);
     document.body.appendChild(container);
 
     let movePointerId: number | null = null;
@@ -234,43 +243,41 @@ export const createWalkFlyControls = (
     movePad.addEventListener('pointerup', resetMove);
     movePad.addEventListener('pointercancel', resetMove);
 
-    let lookPointerId: number | null = null;
-    let lastLook = { x: 0, y: 0 };
+    let rotatePointerId: number | null = null;
+    let rotateCenter = { x: 0, y: 0 };
+    let rotateRadius = 0;
 
-    lookPad.addEventListener('pointerdown', (event) => {
-      lookPointerId = event.pointerId;
-      lookPad.setPointerCapture(event.pointerId);
-      lastLook = { x: event.clientX, y: event.clientY };
-    });
-
-    lookPad.addEventListener('pointermove', (event) => {
-      if (event.pointerId !== lookPointerId) {
-        return;
-      }
-      const dx = event.clientX - lastLook.x;
-      const dy = event.clientY - lastLook.y;
-      lastLook = { x: event.clientX, y: event.clientY };
-      if (state.gyroEnabled) {
-        lookOffsetYaw -= dx * state.lookSpeed * 1.2;
-        lookOffsetPitch -= dy * state.lookSpeed * 1.2;
-        lookOffsetPitch = clamp(
-          lookOffsetPitch,
-          -Math.PI / 3,
-          Math.PI / 3
-        );
-      } else {
-        yaw -= dx * state.lookSpeed * 1.5;
-        pitch -= dy * state.lookSpeed * 1.5;
-        updateRotation();
-      }
-    });
-
-    const resetLook = () => {
-      lookPointerId = null;
+    const updateRotate = (event: PointerEvent) => {
+      const dx = event.clientX - rotateCenter.x;
+      const normalizedX = clamp(dx / rotateRadius, -1, 1);
+      touchRotate = normalizedX;
+      rotateStick.style.transform = `translate(${normalizedX * 28}px, 0)`;
     };
 
-    lookPad.addEventListener('pointerup', resetLook);
-    lookPad.addEventListener('pointercancel', resetLook);
+    rotatePad.addEventListener('pointerdown', (event) => {
+      rotatePointerId = event.pointerId;
+      rotatePad.setPointerCapture(event.pointerId);
+      const rect = rotatePad.getBoundingClientRect();
+      rotateCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      rotateRadius = rect.width / 2;
+      updateRotate(event);
+    });
+
+    rotatePad.addEventListener('pointermove', (event) => {
+      if (event.pointerId !== rotatePointerId) {
+        return;
+      }
+      updateRotate(event);
+    });
+
+    const resetRotate = () => {
+      rotatePointerId = null;
+      touchRotate = 0;
+      rotateStick.style.transform = 'translate(0, 0)';
+    };
+
+    rotatePad.addEventListener('pointerup', resetRotate);
+    rotatePad.addEventListener('pointercancel', resetRotate);
 
     return container;
   })();
@@ -289,7 +296,7 @@ export const createWalkFlyControls = (
         const gamma = ((deviceOrientation.gamma ?? 0) * Math.PI) / 180;
         const orient = (screenOrientation * Math.PI) / 180;
         setObjectQuaternion(camera.quaternion, alpha, beta, gamma, orient);
-        qOffset.setFromEuler(new Euler(lookOffsetPitch, lookOffsetYaw, 0, 'YXZ'));
+        qOffset.setFromEuler(new Euler(0, lookOffsetYaw, 0, 'YXZ'));
         camera.quaternion.multiply(qOffset);
       }
     }
@@ -321,6 +328,16 @@ export const createWalkFlyControls = (
 
     if (direction.lengthSq() > 1) {
       direction.normalize();
+    }
+
+    const rotateRate = 1.6;
+    if (touchRotate !== 0) {
+      if (state.gyroEnabled) {
+        lookOffsetYaw -= touchRotate * rotateRate * delta;
+      } else {
+        yaw -= touchRotate * rotateRate * delta;
+        updateRotation();
+      }
     }
 
     camera.position.addScaledVector(direction, state.speed * delta);
@@ -395,7 +412,6 @@ export const createWalkFlyControls = (
       yaw = camera.rotation.y;
       pitch = camera.rotation.x;
       lookOffsetYaw = 0;
-      lookOffsetPitch = 0;
     } else {
       window.removeEventListener('deviceorientation', handleDeviceOrientation);
       window.removeEventListener('orientationchange', handleOrientationChange);
