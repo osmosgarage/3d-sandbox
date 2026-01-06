@@ -9,6 +9,8 @@ export default defineConfig({
     sourcemap: true
   },
   server: {
+    // Allow reverse-proxy traffic for the dev server through 3d.eijap.art
+    allowedHosts: ['3d.eijap.art'],
     port: 5173,
     open: true
   }
