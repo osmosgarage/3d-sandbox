@@ -96,8 +96,8 @@ export const createUI = ({
   const toggleButton = document.createElement('button');
   toggleButton.className = 'ui-toggle';
   toggleButton.type = 'button';
-  toggleButton.setAttribute('aria-expanded', 'true');
-  toggleButton.textContent = '▾';
+  toggleButton.setAttribute('aria-expanded', 'false');
+  toggleButton.textContent = '▸';
 
   toggleButton.addEventListener('click', () => {
     const isCollapsed = panel.classList.toggle('collapsed');
@@ -228,11 +228,20 @@ export const createUI = ({
         });
       });
       navigationSection.appendChild(gyroToggle);
+
+      if (!state.gyroEnabled) {
+        navigation.setGyroEnabled(true).then((granted) => {
+          if (granted) {
+            (gyroToggle.querySelector('input') as HTMLInputElement).checked = true;
+          }
+        });
+      }
     }
 
     content.appendChild(navigationSection);
   }
 
+  panel.classList.add('collapsed');
   panel.append(toggleButton, content);
   document.body.appendChild(panel);
 

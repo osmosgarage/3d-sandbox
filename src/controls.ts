@@ -298,6 +298,8 @@ export const createWalkFlyControls = (
         setObjectQuaternion(camera.quaternion, alpha, beta, gamma, orient);
         qOffset.setFromEuler(new Euler(0, lookOffsetYaw, 0, 'YXZ'));
         camera.quaternion.multiply(qOffset);
+        const stabilized = new Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+        camera.rotation.set(stabilized.x, stabilized.y, 0);
       }
     }
     const previousPosition = camera.position.clone();
