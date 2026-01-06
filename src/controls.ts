@@ -58,11 +58,14 @@ export const createWalkFlyControls = (
   let isPointerLocked = false;
   let deviceOrientation: DeviceOrientationEvent | null = null;
   let screenOrientation = 0;
+  let lookOffsetYaw = 0;
+  let lookOffsetPitch = 0;
 
   const zee = new Vector3(0, 0, 1);
   const euler = new Euler();
   const q0 = new Quaternion();
   const q1 = new Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
+  const qOffset = new Quaternion();
 
   const setObjectQuaternion = (
     quaternion: Quaternion,
@@ -244,15 +247,22 @@ export const createWalkFlyControls = (
       if (event.pointerId !== lookPointerId) {
         return;
       }
-      if (state.gyroEnabled) {
-        return;
-      }
       const dx = event.clientX - lastLook.x;
       const dy = event.clientY - lastLook.y;
       lastLook = { x: event.clientX, y: event.clientY };
-      yaw -= dx * state.lookSpeed * 1.5;
-      pitch -= dy * state.lookSpeed * 1.5;
-      updateRotation();
+      if (state.gyroEnabled) {
+        lookOffsetYaw -= dx * state.lookSpeed * 1.2;
+        lookOffsetPitch -= dy * state.lookSpeed * 1.2;
+        lookOffsetPitch = clamp(
+          lookOffsetPitch,
+          -Math.PI / 3,
+          Math.PI / 3
+        );
+      } else {
+        yaw -= dx * state.lookSpeed * 1.5;
+        pitch -= dy * state.lookSpeed * 1.5;
+        updateRotation();
+      }
     });
 
     const resetLook = () => {
@@ -279,6 +289,8 @@ export const createWalkFlyControls = (
         const gamma = ((deviceOrientation.gamma ?? 0) * Math.PI) / 180;
         const orient = (screenOrientation * Math.PI) / 180;
         setObjectQuaternion(camera.quaternion, alpha, beta, gamma, orient);
+        qOffset.setFromEuler(new Euler(lookOffsetPitch, lookOffsetYaw, 0, 'YXZ'));
+        camera.quaternion.multiply(qOffset);
       }
     }
     const previousPosition = camera.position.clone();
@@ -296,9 +308,13 @@ export const createWalkFlyControls = (
       direction.addScaledVector(forward, inputZ);
       direction.y += inputY;
     } else {
-      const currentYaw = camera.rotation.y;
-      const forward = new Vector3(Math.sin(currentYaw), 0, -Math.cos(currentYaw));
-      const right = new Vector3(Math.cos(currentYaw), 0, Math.sin(currentYaw));
+      const forward = new Vector3();
+      camera.getWorldDirection(forward);
+      forward.y = 0;
+      forward.normalize();
+      const right = new Vector3()
+        .crossVectors(forward, new Vector3(0, 1, 0))
+        .normalize();
       direction.addScaledVector(right, inputX);
       direction.addScaledVector(forward, inputZ);
     }
@@ -378,6 +394,8 @@ export const createWalkFlyControls = (
       window.addEventListener('orientationchange', handleOrientationChange);
       yaw = camera.rotation.y;
       pitch = camera.rotation.x;
+      lookOffsetYaw = 0;
+      lookOffsetPitch = 0;
     } else {
       window.removeEventListener('deviceorientation', handleDeviceOrientation);
       window.removeEventListener('orientationchange', handleOrientationChange);
