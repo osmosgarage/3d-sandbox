@@ -43,7 +43,7 @@ loadModels(scene, modelConfigs)
       layoutModels(models, { spacing: 3 });
     }
 
-    setModelsEnvironmentIntensity(models, 1);
+    setModelsEnvironmentIntensity(models, 0.8);
     createUI({
       models,
       lighting,
