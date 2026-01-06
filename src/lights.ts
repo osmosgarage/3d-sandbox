@@ -12,6 +12,7 @@ export type LightingRig = {
   ambientLight: AmbientLight;
   directionalLight: DirectionalLight;
   pointLights: PointLight[];
+  setEnabled: (enabled: boolean) => void;
   dispose: () => void;
 };
 
@@ -41,13 +42,20 @@ export const setupLighting = (
   ).texture;
   pmremGenerator.dispose();
 
+  const rigLights = [ambientLight, directionalLight, keyLight, fillLight];
   scene.environment = environmentTexture;
-  scene.add(ambientLight, directionalLight, keyLight, fillLight);
+  scene.add(...rigLights);
 
   return {
     ambientLight,
     directionalLight,
     pointLights: [keyLight, fillLight],
+    setEnabled: (enabled) => {
+      rigLights.forEach((light) => {
+        light.visible = enabled;
+      });
+      scene.environment = enabled ? environmentTexture : null;
+    },
     dispose: () => {
       environmentTexture.dispose();
     }

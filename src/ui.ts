@@ -154,6 +154,12 @@ export const createUI = ({
   );
 
   lightingSection.appendChild(
+    createToggle('Code Lights', true, (enabled) => {
+      lighting.setEnabled(enabled);
+    })
+  );
+
+  lightingSection.appendChild(
     createSlider(
       'Directional',
       lighting.directionalLight.intensity,
