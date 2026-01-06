@@ -65,7 +65,7 @@ export const createWalkFlyControls = (
   const euler = new Euler();
   const q0 = new Quaternion();
   const q1 = new Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
-  const qOffset = new Quaternion();
+  const forward = new Vector3();
 
   const setObjectQuaternion = (
     quaternion: Quaternion,
@@ -296,10 +296,11 @@ export const createWalkFlyControls = (
         const gamma = ((deviceOrientation.gamma ?? 0) * Math.PI) / 180;
         const orient = (screenOrientation * Math.PI) / 180;
         setObjectQuaternion(camera.quaternion, alpha, beta, gamma, orient);
-        qOffset.setFromEuler(new Euler(0, lookOffsetYaw, 0, 'YXZ'));
-        camera.quaternion.multiply(qOffset);
-        const stabilized = new Euler().setFromQuaternion(camera.quaternion, 'YXZ');
-        camera.rotation.set(stabilized.x, stabilized.y, 0);
+        forward.set(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+        const clampedY = clamp(forward.y, -1, 1);
+        const pitchFromDevice = Math.asin(clampedY);
+        const yawFromDevice = Math.atan2(forward.x, -forward.z);
+        camera.rotation.set(pitchFromDevice, yawFromDevice + lookOffsetYaw, 0);
       }
     }
     const previousPosition = camera.position.clone();
