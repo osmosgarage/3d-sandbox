@@ -1,5 +1,4 @@
-import { Object3D, PerspectiveCamera, Raycaster, Vector3 } from 'three';
-import { DeviceOrientationControls } from 'three/examples/jsm/controls/DeviceOrientationControls.js';
+import { Euler, Object3D, PerspectiveCamera, Quaternion, Raycaster, Vector3 } from 'three';
 
 type ControlState = {
   flyMode: boolean;
@@ -57,7 +56,26 @@ export const createWalkFlyControls = (
   let yaw = camera.rotation.y;
   let pitch = camera.rotation.x;
   let isPointerLocked = false;
-  const deviceControls = new DeviceOrientationControls(camera);
+  let deviceOrientation: DeviceOrientationEvent | null = null;
+  let screenOrientation = 0;
+
+  const zee = new Vector3(0, 0, 1);
+  const euler = new Euler();
+  const q0 = new Quaternion();
+  const q1 = new Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
+
+  const setObjectQuaternion = (
+    quaternion: Quaternion,
+    alpha: number,
+    beta: number,
+    gamma: number,
+    orient: number
+  ) => {
+    euler.set(beta, alpha, -gamma, 'YXZ');
+    quaternion.setFromEuler(euler);
+    quaternion.multiply(q1);
+    quaternion.multiply(q0.setFromAxisAngle(zee, -orient));
+  };
 
   camera.rotation.order = 'YXZ';
 
@@ -255,7 +273,13 @@ export const createWalkFlyControls = (
 
   const update = (delta: number) => {
     if (state.gyroEnabled) {
-      deviceControls.update();
+      if (deviceOrientation) {
+        const alpha = ((deviceOrientation.alpha ?? 0) * Math.PI) / 180;
+        const beta = ((deviceOrientation.beta ?? 0) * Math.PI) / 180;
+        const gamma = ((deviceOrientation.gamma ?? 0) * Math.PI) / 180;
+        const orient = (screenOrientation * Math.PI) / 180;
+        setObjectQuaternion(camera.quaternion, alpha, beta, gamma, orient);
+      }
     }
     const previousPosition = camera.position.clone();
     const inputX = movement.right - movement.left + touchMovement.x;
@@ -310,7 +334,18 @@ export const createWalkFlyControls = (
     document.removeEventListener('keyup', onKeyUp);
     domElement.removeEventListener('click', requestPointerLock);
     touchControls?.remove();
-    deviceControls.disconnect();
+    window.removeEventListener('deviceorientation', handleDeviceOrientation);
+    window.removeEventListener('orientationchange', handleOrientationChange);
+  };
+
+  const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
+    deviceOrientation = event;
+  };
+
+  const handleOrientationChange = () => {
+    const orientation =
+      screen.orientation?.angle ?? (window as Window & { orientation?: number }).orientation ?? 0;
+    screenOrientation = typeof orientation === 'number' ? orientation : 0;
   };
 
   const setGyroEnabled = async (enabled: boolean) => {
@@ -338,11 +373,14 @@ export const createWalkFlyControls = (
 
     state.gyroEnabled = enabled;
     if (enabled) {
-      deviceControls.connect();
+      handleOrientationChange();
+      window.addEventListener('deviceorientation', handleDeviceOrientation, true);
+      window.addEventListener('orientationchange', handleOrientationChange);
       yaw = camera.rotation.y;
       pitch = camera.rotation.x;
     } else {
-      deviceControls.disconnect();
+      window.removeEventListener('deviceorientation', handleDeviceOrientation);
+      window.removeEventListener('orientationchange', handleOrientationChange);
     }
     return state.gyroEnabled;
   };
